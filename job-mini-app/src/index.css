@@ -1,5 +1,4 @@
 :root {
-  /* Цвета берём из темы Telegram, с запасными значениями для браузера. */
   --bg: var(--tg-theme-bg-color, #ffffff);
   --secondary-bg: var(--tg-theme-secondary-bg-color, #f1f2f6);
   --text: var(--tg-theme-text-color, #1a1a1a);
@@ -7,6 +6,9 @@
   --link: var(--tg-theme-link-color, #2f80ed);
   --button: var(--tg-theme-button-color, #2f80ed);
   --button-text: var(--tg-theme-button-text-color, #ffffff);
+  --danger: #e5484d;
+  --ok: #2f9e44;
+  --warn: #f08c00;
   --nav-height: 60px;
 }
 
@@ -26,12 +28,12 @@ body {
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   font-size: 15px;
-  line-height: 1.4;
+  line-height: 1.45;
   -webkit-font-smoothing: antialiased;
 }
 
 .app__content {
-  padding: 16px 16px calc(var(--nav-height) + 24px);
+  padding: 16px 16px calc(var(--nav-height) + 28px);
   max-width: 640px;
   margin: 0 auto;
 }
@@ -41,12 +43,81 @@ body {
   margin: 0 0 4px;
 }
 
+.page h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
 .page__subtitle {
   color: var(--hint);
   margin: 0 0 12px;
   font-size: 13px;
 }
 
+.pre-wrap {
+  white-space: pre-wrap;
+  margin: 0;
+}
+
+.section {
+  margin-top: 18px;
+}
+
+.error-text {
+  color: var(--danger);
+  font-size: 14px;
+}
+
+.empty {
+  color: var(--hint);
+}
+
+.link {
+  background: none;
+  border: none;
+  color: var(--link);
+  cursor: pointer;
+  padding: 0;
+  font-size: inherit;
+  text-decoration: underline;
+}
+
+/* Поиск */
+.searchbar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.searchbar__input {
+  flex: 1;
+  min-width: 0;
+  background: var(--secondary-bg);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+}
+
+.searchbar__filter {
+  flex: 0 0 auto;
+  background: var(--secondary-bg);
+  border: none;
+  border-radius: 10px;
+  padding: 0 14px;
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.searchbar__filter.is-active {
+  background: var(--button);
+  color: var(--button-text);
+}
+
+/* Чипы */
 .chips {
   display: flex;
   gap: 8px;
@@ -73,6 +144,18 @@ body {
   color: var(--button-text);
 }
 
+/* Фильтры */
+.filter-panel {
+  background: var(--secondary-bg);
+  border-radius: 12px;
+  padding: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Список вакансий */
 .job-list {
   display: flex;
   flex-direction: column;
@@ -110,6 +193,10 @@ body {
   margin: 6px 0 0;
 }
 
+.job-card__meta--small {
+  font-size: 12px;
+}
+
 .job-card__tags {
   display: flex;
   flex-wrap: wrap;
@@ -125,6 +212,12 @@ body {
   font-size: 12px;
 }
 
+.tag--removable {
+  border: none;
+  cursor: pointer;
+}
+
+/* Детали вакансии */
 .job-detail__title {
   font-size: 22px;
   margin: 0 0 6px;
@@ -136,20 +229,66 @@ body {
   margin: 0 0 6px;
 }
 
-.job-detail__desc {
-  margin-top: 16px;
-  white-space: pre-wrap;
+.facts {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin: 14px 0;
 }
 
-.empty {
+.fact {
+  background: var(--secondary-bg);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.fact__label {
   color: var(--hint);
+  font-size: 12px;
 }
 
-/* Форма создания вакансии */
+.fact__value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Бейджи */
+.badge {
+  display: inline-block;
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12px;
+  background: var(--secondary-bg);
+  color: var(--hint);
+  margin: 8px 0;
+}
+
+.badge--ok {
+  background: rgba(47, 158, 68, 0.15);
+  color: var(--ok);
+}
+
+.badge--warn {
+  background: rgba(240, 140, 0, 0.15);
+  color: var(--warn);
+}
+
+/* Формы */
 .form {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.form__section {
+  font-size: 15px;
+  margin: 10px 0 0;
+  color: var(--hint);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .field {
@@ -167,9 +306,17 @@ body {
   color: var(--text);
 }
 
+.field--narrow {
+  max-width: 90px;
+}
+
 .field input[type='text'],
 .field input:not([type]),
-.field textarea {
+.field input[type='number'],
+.field input[type='email'],
+.field input[type='search'],
+.field textarea,
+.field select {
   background: var(--secondary-bg);
   border: none;
   border-radius: 10px;
@@ -180,6 +327,31 @@ body {
   outline: none;
 }
 
+.salary-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.skill-input {
+  display: flex;
+  gap: 8px;
+}
+
+.skill-input input {
+  flex: 1;
+  min-width: 0;
+  background: var(--secondary-bg);
+  border: none;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 15px;
+  outline: none;
+}
+
+/* Кнопки */
 .btn {
   border: none;
   border-radius: 10px;
@@ -207,6 +379,36 @@ body {
   font-size: 14px;
 }
 
+/* Профиль */
+.profile-head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex: 0 0 auto;
+}
+
+.avatar--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--button);
+  color: var(--button-text);
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.profile-name {
+  margin: 0;
+}
+
 /* Нижнее меню */
 .bottom-nav {
   position: fixed;
@@ -230,7 +432,7 @@ body {
   gap: 2px;
   text-decoration: none;
   color: var(--hint);
-  font-size: 11px;
+  font-size: 10px;
 }
 
 .bottom-nav__item.is-active {
@@ -238,6 +440,6 @@ body {
 }
 
 .bottom-nav__icon {
-  font-size: 20px;
+  font-size: 19px;
   line-height: 1;
 }

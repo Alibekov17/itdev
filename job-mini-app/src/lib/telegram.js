@@ -1,4 +1,4 @@
-// Небольшие обёртки над Telegram WebApp API.
+// Обёртки над Telegram WebApp API.
 
 export function getTelegram() {
   return typeof window !== 'undefined' ? window.Telegram?.WebApp ?? null : null;
@@ -10,6 +10,17 @@ export function isTelegram() {
   return Boolean(tg && tg.initData);
 }
 
+// Строка initData — подписанный Telegram «пропуск» пользователя.
+export function getInitData() {
+  return getTelegram()?.initData || '';
+}
+
+// Необязательный dev-пользователь для локальной отладки в браузере.
+// Задаётся через VITE_DEV_USER в .env и требует ALLOW_DEV_LOGIN=true на бэкенде.
+export function getDevUser() {
+  return import.meta.env.VITE_DEV_USER || '';
+}
+
 export function haptic(style = 'light') {
   const tg = getTelegram();
   const hf = tg?.HapticFeedback;
@@ -18,25 +29,17 @@ export function haptic(style = 'light') {
   hf.impactOccurred(allowed.includes(style) ? style : 'light');
 }
 
-const RESPONSES_KEY = 'job_mini_app_responses';
-
-// Отклики храним локально, чтобы экран «Мои отклики» работал без бэкенда.
-export function getResponses() {
-  try {
-    return JSON.parse(localStorage.getItem(RESPONSES_KEY) || '[]');
-  } catch {
-    return [];
-  }
+export function notify(type = 'success') {
+  const tg = getTelegram();
+  tg?.HapticFeedback?.notificationOccurred?.(type);
 }
 
-export function saveResponse(job) {
-  const all = getResponses();
-  if (all.some((r) => String(r.id) === String(job.id))) return all;
-  const next = [{ ...job, respondedAt: Date.now() }, ...all];
-  try {
-    localStorage.setItem(RESPONSES_KEY, JSON.stringify(next));
-  } catch {
-    // localStorage может быть недоступен — не критично.
+export function showPopup(title, message) {
+  const tg = getTelegram();
+  if (tg?.showPopup) {
+    tg.showPopup({ title, message });
+  } else {
+    // eslint-disable-next-line no-alert
+    alert(`${title}\n\n${message}`);
   }
-  return next;
 }

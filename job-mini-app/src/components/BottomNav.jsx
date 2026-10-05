@@ -2,8 +2,10 @@ import { NavLink } from 'react-router-dom';
 
 const TABS = [
   { to: '/', label: 'Вакансии', icon: '💼' },
-  { to: '/create', label: 'Создать', icon: '➕' },
+  { to: '/create', label: 'Разместить', icon: '➕' },
+  { to: '/my-jobs', label: 'Мои', icon: '📋' },
   { to: '/responses', label: 'Отклики', icon: '📨' },
+  { to: '/profile', label: 'Профиль', icon: '👤' },
 ];
 
 export default function BottomNav() {
