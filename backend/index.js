@@ -5,6 +5,7 @@ const cors = require('cors');
 const { validateInitData } = require('./initData');
 const { supabase, usingServiceRole } = require('./supabase');
 const payments = require('./payments');
+const bot = require('./bot');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 const PORT = process.env.PORT || 3000;
@@ -876,6 +877,7 @@ async function handleTelegramUpdate(update) {
     await payments.answerPreCheckoutQuery(update.pre_checkout_query.id, true);
     return;
   }
+
   const sp = update.message?.successful_payment;
   if (sp) {
     const paymentId = sp.invoice_payload;
@@ -884,6 +886,16 @@ async function handleTelegramUpdate(update) {
       console.log('[payments] оплата подтверждена:', paymentId);
     } catch (e) {
       console.error('[payments] не удалось обработать оплату:', e.message);
+    }
+    return;
+  }
+
+  // Команды бота (/start, /help, /jobs, /profile).
+  if (update.message?.text) {
+    try {
+      await bot.handleMessage(update.message);
+    } catch (e) {
+      console.error('[bot] ошибка обработки команды:', e.message);
     }
   }
 }
@@ -902,5 +914,9 @@ app.post('/api/telegram/webhook', async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Backend запущен на порту ${PORT}`);
   console.log(`Платежи: ${payments.enabled ? 'Telegram Stars' : 'demo-режим (BOT_TOKEN не задан)'}`);
-  if (payments.enabled) payments.startPolling(handleTelegramUpdate);
+  if (payments.enabled) {
+    payments.startPolling(handleTelegramUpdate);
+    // Кнопка-меню со ссылкой на Mini App (нужен WEBAPP_URL).
+    bot.setMenuButton().catch((e) => console.error('[bot] setMenuButton:', e.message));
+  }
 });
