@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function RequireAuth({ children }) {
@@ -18,6 +19,11 @@ export default function RequireAuth({ children }) {
         {error && <p className="error-text">{error}</p>}
       </div>
     );
+  }
+
+  // Незарегистрированных пользователей отправляем завершить профиль.
+  if (!profile.is_registered) {
+    return <Navigate to="/register" replace />;
   }
 
   return children;

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { isTelegram } from '../lib/telegram';
+import { roleLabel } from '../lib/constants';
 
 export default function Profile() {
   const navigate = useNavigate();
@@ -65,6 +66,15 @@ export default function Profile() {
         </div>
       </div>
 
+      {!profile.is_registered && (
+        <div className="notice">
+          <p>⚠️ Регистрация не завершена. Заполните профиль, чтобы публиковать вакансии и откликаться.</p>
+          <button type="button" className="btn btn--primary" onClick={() => navigate('/register')}>
+            Завершить регистрацию
+          </button>
+        </div>
+      )}
+
       <div className="facts">
         <div className="fact">
           <span className="fact__label">Вакансий</span>
@@ -80,6 +90,31 @@ export default function Profile() {
         </div>
       </div>
 
+      <div className="facts">
+        <div className="fact">
+          <span className="fact__label">Роль</span>
+          <span className="fact__value">{roleLabel(profile.role) || '—'}</span>
+        </div>
+        <div className="fact">
+          <span className="fact__label">Город</span>
+          <span className="fact__value">{profile.city || '—'}</span>
+        </div>
+        <div className="fact">
+          <span className="fact__label">Телефон</span>
+          <span className="fact__value">{profile.phone || '—'}</span>
+        </div>
+      </div>
+
+      {profile.about && (
+        <section className="section">
+          <h2>О себе</h2>
+          <p className="pre-wrap">{profile.about}</p>
+        </section>
+      )}
+
+      <button type="button" className="btn btn--secondary" onClick={() => navigate('/register')}>
+        {profile.is_registered ? 'Редактировать профиль' : 'Заполнить профиль'}
+      </button>
       <button type="button" className="btn btn--secondary" onClick={() => navigate('/my-jobs')}>
         Мои вакансии
       </button>

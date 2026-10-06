@@ -21,6 +21,12 @@ create table public.profiles (
   language_code text,
   photo_url     text,
   is_admin      boolean not null default false,
+  -- Данные, которые пользователь заполняет при регистрации в приложении.
+  role          text,                                   -- seeker / employer / both
+  phone         text,
+  city          text,
+  about         text,
+  is_registered boolean not null default false,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()
 );

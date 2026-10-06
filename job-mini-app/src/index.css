@@ -520,3 +520,21 @@ body {
 .report textarea {
   width: 100%;
 }
+
+/* Уведомление (например, о незавершённой регистрации) */
+.notice {
+  background: rgba(240, 140, 0, 0.12);
+  border-radius: 12px;
+  padding: 14px;
+  margin: 12px 0;
+}
+
+.notice p {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.notice .btn {
+  width: 100%;
+  margin-top: 0;
+}

@@ -7,6 +7,7 @@ import MyResponses from './pages/MyResponses';
 import ReceivedResponses from './pages/ReceivedResponses';
 import MyComplaints from './pages/MyComplaints';
 import Profile from './pages/Profile';
+import Register from './pages/Register';
 import Admin from './pages/Admin';
 import AdminComplaints from './pages/AdminComplaints';
 import AdminUsers from './pages/AdminUsers';
@@ -75,6 +76,7 @@ export default function App() {
             }
           />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/register" element={<Register />} />
           <Route
             path="/admin"
             element={

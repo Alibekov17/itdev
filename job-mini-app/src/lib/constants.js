@@ -52,6 +52,16 @@ export const JOB_STATUSES = {
   rejected: 'Отклонена',
 };
 
+export const PROFILE_ROLES = [
+  { value: 'seeker', label: 'Соискатель — ищу работу' },
+  { value: 'employer', label: 'Работодатель — ищу сотрудников' },
+  { value: 'both', label: 'И то, и другое' },
+];
+
+export function roleLabel(value) {
+  return PROFILE_ROLES.find((r) => r.value === value)?.label || value || '';
+}
+
 export const COMPLAINT_REASONS = [
   { value: 'spam', label: 'Спам или реклама' },
   { value: 'fraud', label: 'Мошенничество' },

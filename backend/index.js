@@ -180,6 +180,53 @@ app.post('/api/auth/me', requireAuth, (req, res) => {
   res.json({ ok: true, profile: req.profile });
 });
 
+// Регистрация в приложении / редактирование профиля.
+// Заполняет роль, телефон, город и «о себе», ставит флаг is_registered.
+const PROFILE_ROLES = ['seeker', 'employer', 'both'];
+
+app.patch('/api/profile', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const patch = {};
+
+    if (b.first_name !== undefined) patch.first_name = b.first_name ? String(b.first_name).slice(0, 100) : null;
+    if (b.last_name !== undefined) patch.last_name = b.last_name ? String(b.last_name).slice(0, 100) : null;
+    if (b.phone !== undefined) patch.phone = b.phone ? String(b.phone).slice(0, 40) : null;
+    if (b.city !== undefined) patch.city = b.city ? String(b.city).slice(0, 120) : null;
+    if (b.about !== undefined) patch.about = b.about ? String(b.about).slice(0, 2000) : null;
+    if (b.role !== undefined) {
+      if (b.role && !PROFILE_ROLES.includes(b.role)) {
+        return res.status(400).json({ ok: false, error: 'Недопустимая роль' });
+      }
+      patch.role = b.role || null;
+    }
+
+    // Явная регистрация: требуется имя и роль.
+    if (b.register === true || b.is_registered === true) {
+      const name = patch.first_name !== undefined ? patch.first_name : req.profile.first_name;
+      const role = patch.role !== undefined ? patch.role : req.profile.role;
+      if (!name) return res.status(400).json({ ok: false, error: 'Укажите имя' });
+      if (!role) return res.status(400).json({ ok: false, error: 'Выберите роль' });
+      patch.is_registered = true;
+    }
+
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'Нет полей для обновления' });
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .update(patch)
+      .eq('telegram_id', req.profile.telegram_id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, profile: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ---------------------------------------------------------------- jobs (public)
 
 app.get('/api/jobs', async (req, res) => {

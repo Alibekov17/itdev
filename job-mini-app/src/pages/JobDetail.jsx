@@ -58,7 +58,8 @@ export default function JobDetail() {
     };
   }, [id]);
 
-  const canRespond = Boolean(profile) && job?.status === 'published' && !isOwner && !hasResponded;
+  const canRespond =
+    Boolean(profile?.is_registered) && job?.status === 'published' && !isOwner && !hasResponded;
 
   const respond = async () => {
     if (!canRespond || sending) return;
@@ -98,6 +99,16 @@ export default function JobDetail() {
     } finally {
       setReporting(false);
     }
+  };
+
+  const share = () => {
+    const url = typeof window !== 'undefined' ? window.location.href : '';
+    const text = `${job.title} — ${job.company}`;
+    const shareUrl = `https://t.me/share/url?url=${encodeURIComponent(url)}&text=${encodeURIComponent(text)}`;
+    const tg = getTelegram();
+    haptic('light');
+    if (tg?.openTelegramLink) tg.openTelegramLink(shareUrl);
+    else window.open(shareUrl, '_blank');
   };
 
   // Нативные кнопки Telegram.
@@ -222,18 +233,23 @@ export default function JobDetail() {
         {job.published_at ? ` · Опубликовано ${formatDate(job.published_at)}` : ''}
       </p>
 
-      {isOwner && (
-        <div className="admin-actions">
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate(`/edit/${job.id}`)}>
-            Редактировать
-          </button>
-          <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate('/received')}>
-            Отклики
-          </button>
-        </div>
-      )}
+      <div className="admin-actions">
+        <button type="button" className="btn btn--secondary btn--sm" onClick={share}>
+          📤 Поделиться
+        </button>
+        {isOwner && (
+          <>
+            <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate(`/edit/${job.id}`)}>
+              Редактировать
+            </button>
+            <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate('/received')}>
+              Отклики
+            </button>
+          </>
+        )}
+      </div>
 
-      {profile && !isOwner && job.status === 'published' && !reported && (
+      {profile?.is_registered && !isOwner && job.status === 'published' && !reported && (
         <div className="report">
           {!showReport ? (
             <button type="button" className="link" onClick={() => setShowReport(true)}>
@@ -309,6 +325,14 @@ export default function JobDetail() {
       {hasResponded && <p className="badge badge--ok">Вы уже откликнулись</p>}
       {isOwner && <p className="badge">Это ваша вакансия</p>}
       {!profile && <p className="empty">Откликаться можно только из Telegram.</p>}
+      {profile && !profile.is_registered && !isOwner && job.status === 'published' && (
+        <div className="notice">
+          <p>Чтобы откликнуться, завершите регистрацию в приложении.</p>
+          <button type="button" className="btn btn--primary" onClick={() => navigate('/register')}>
+            Зарегистрироваться
+          </button>
+        </div>
+      )}
     </div>
   );
 }
