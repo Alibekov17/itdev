@@ -6,7 +6,7 @@ import { isTelegram } from '../lib/telegram';
 
 export default function Profile() {
   const navigate = useNavigate();
-  const { profile, loading, error, refresh } = useAuth();
+  const { profile, isAdmin, loading, error, refresh } = useAuth();
   const [stats, setStats] = useState({ jobs: 0, published: 0, responses: 0 });
 
   useEffect(() => {
@@ -86,9 +86,21 @@ export default function Profile() {
       <button type="button" className="btn btn--secondary" onClick={() => navigate('/responses')}>
         Мои отклики
       </button>
+      <button type="button" className="btn btn--secondary" onClick={() => navigate('/received')}>
+        Отклики на мои вакансии
+      </button>
+      <button type="button" className="btn btn--secondary" onClick={() => navigate('/my-complaints')}>
+        Мои жалобы
+      </button>
       <button type="button" className="btn btn--primary" onClick={() => navigate('/create')}>
         Разместить вакансию
       </button>
+
+      {isAdmin && (
+        <button type="button" className="btn btn--secondary" onClick={() => navigate('/admin')}>
+          🛡️ Админ-панель
+        </button>
+      )}
 
       <p className="page__subtitle" style={{ marginTop: 16 }}>
         Вход выполнен через Telegram. Отдельный пароль не нужен.

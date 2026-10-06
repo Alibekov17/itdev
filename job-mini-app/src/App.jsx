@@ -4,9 +4,16 @@ import JobDetail from './pages/JobDetail';
 import CreateJob from './pages/CreateJob';
 import MyJobs from './pages/MyJobs';
 import MyResponses from './pages/MyResponses';
+import ReceivedResponses from './pages/ReceivedResponses';
+import MyComplaints from './pages/MyComplaints';
 import Profile from './pages/Profile';
+import Admin from './pages/Admin';
+import AdminComplaints from './pages/AdminComplaints';
+import AdminUsers from './pages/AdminUsers';
+import NotFound from './pages/NotFound';
 import BottomNav from './components/BottomNav';
 import RequireAuth from './components/RequireAuth';
+import RequireAdmin from './components/RequireAdmin';
 
 export default function App() {
   const location = useLocation();
@@ -21,6 +28,14 @@ export default function App() {
           <Route path="/job/:id" element={<JobDetail />} />
           <Route
             path="/create"
+            element={
+              <RequireAuth>
+                <CreateJob />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/edit/:id"
             element={
               <RequireAuth>
                 <CreateJob />
@@ -43,8 +58,48 @@ export default function App() {
               </RequireAuth>
             }
           />
+          <Route
+            path="/received"
+            element={
+              <RequireAuth>
+                <ReceivedResponses />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/my-complaints"
+            element={
+              <RequireAuth>
+                <MyComplaints />
+              </RequireAuth>
+            }
+          />
           <Route path="/profile" element={<Profile />} />
-          <Route path="*" element={<JobList />} />
+          <Route
+            path="/admin"
+            element={
+              <RequireAdmin>
+                <Admin />
+              </RequireAdmin>
+            }
+          />
+          <Route
+            path="/admin/complaints"
+            element={
+              <RequireAdmin>
+                <AdminComplaints />
+              </RequireAdmin>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <RequireAdmin>
+                <AdminUsers />
+              </RequireAdmin>
+            }
+          />
+          <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       {!hideNav && <BottomNav />}

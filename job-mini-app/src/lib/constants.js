@@ -49,7 +49,26 @@ export const JOB_STATUSES = {
   pending_payment: 'Ожидает оплаты',
   published: 'Опубликована',
   archived: 'В архиве',
+  rejected: 'Отклонена',
 };
+
+export const COMPLAINT_REASONS = [
+  { value: 'spam', label: 'Спам или реклама' },
+  { value: 'fraud', label: 'Мошенничество' },
+  { value: 'offensive', label: 'Оскорбительный контент' },
+  { value: 'wrong_info', label: 'Недостоверная информация' },
+  { value: 'other', label: 'Другое' },
+];
+
+export const COMPLAINT_STATUSES = {
+  open: 'На рассмотрении',
+  resolved: 'Решена',
+  rejected: 'Отклонена',
+};
+
+export function statusLabel(map, value) {
+  return map[value] || value || '';
+}
 
 export function labelOf(list, value) {
   return list.find((item) => item.value === value)?.label || value || '';

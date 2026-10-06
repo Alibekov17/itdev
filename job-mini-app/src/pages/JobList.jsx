@@ -19,6 +19,7 @@ export default function JobList() {
   const [jobs, setJobs] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState(null);
   const [q, setQ] = useState('');
   const [filters, setFilters] = useState(EMPTY_FILTERS);
@@ -26,33 +27,40 @@ export default function JobList() {
 
   const setFilter = (key, value) => setFilters((f) => ({ ...f, [key]: value }));
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await apiFetch('/api/jobs', {
-        query: {
-          q,
-          city: filters.city,
-          remote: filters.remote ? 'true' : '',
-          experience: filters.experience,
-          employment_type: filters.employment_type,
-          schedule: filters.schedule,
-          salary_from: filters.salary_from,
-          sort: filters.sort,
-        },
-      });
-      setJobs(data.jobs || []);
-      setTotal(data.total || 0);
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }, [q, filters]);
+  const load = useCallback(
+    async (offset = 0) => {
+      if (offset === 0) setLoading(true);
+      else setLoadingMore(true);
+      setError(null);
+      try {
+        const data = await apiFetch('/api/jobs', {
+          query: {
+            q,
+            city: filters.city,
+            remote: filters.remote ? 'true' : '',
+            experience: filters.experience,
+            employment_type: filters.employment_type,
+            schedule: filters.schedule,
+            salary_from: filters.salary_from,
+            sort: filters.sort,
+            limit: 20,
+            offset,
+          },
+        });
+        setTotal(data.total || 0);
+        setJobs((prev) => (offset === 0 ? data.jobs || [] : [...prev, ...(data.jobs || [])]));
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [q, filters]
+  );
 
   useEffect(() => {
-    const t = setTimeout(load, 300);
+    const t = setTimeout(() => load(0), 300);
     return () => clearTimeout(t);
   }, [load]);
 
@@ -177,6 +185,18 @@ export default function JobList() {
           <JobCard key={job.id} job={job} onOpen={(id) => navigate(`/job/${id}`)} />
         ))}
       </div>
+
+      {!loading && jobs.length > 0 && jobs.length < total && (
+        <button
+          type="button"
+          className="btn btn--secondary"
+          style={{ width: '100%', marginTop: 12 }}
+          disabled={loadingMore}
+          onClick={() => load(jobs.length)}
+        >
+          {loadingMore ? 'Загрузка…' : `Показать ещё (${total - jobs.length})`}
+        </button>
+      )}
 
       {!loading && !error && jobs.length === 0 && (
         <p className="empty">

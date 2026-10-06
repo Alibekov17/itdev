@@ -6,6 +6,7 @@
 --  Сейчас таблица jobs пустая, так что потерь не будет.
 -- =========================================================
 
+drop table if exists public.complaints cascade;
 drop table if exists public.responses cascade;
 drop table if exists public.payments cascade;
 drop table if exists public.jobs cascade;
@@ -68,6 +69,20 @@ create table public.responses (
   unique (job_id, applicant_id)
 );
 
+-- ---------- Жалобы ----------
+create table public.complaints (
+  id           uuid primary key default gen_random_uuid(),
+  reporter_id  bigint not null references public.profiles(telegram_id) on delete cascade,
+  job_id       uuid references public.jobs(id) on delete set null,
+  reason       text not null,                    -- spam / fraud / offensive / wrong_info / other
+  message      text,
+  status       text not null default 'open',     -- open / resolved / rejected
+  admin_reply  text,
+  resolved_by  bigint references public.profiles(telegram_id) on delete set null,
+  resolved_at  timestamptz,
+  created_at   timestamptz not null default now()
+);
+
 -- ---------- Платежи ----------
 create table public.payments (
   id          uuid primary key default gen_random_uuid(),
@@ -91,6 +106,9 @@ create index jobs_skills_idx       on public.jobs using gin (skills);
 create index responses_job_idx     on public.responses (job_id);
 create index responses_applicant_idx on public.responses (applicant_id);
 create index payments_job_idx      on public.payments (job_id);
+create index complaints_status_idx  on public.complaints (status, created_at desc);
+create index complaints_job_idx     on public.complaints (job_id);
+create index complaints_reporter_idx on public.complaints (reporter_id);
 
 -- ---------- Автообновление updated_at ----------
 create or replace function public.set_updated_at()
@@ -113,6 +131,7 @@ alter table public.profiles  enable row level security;
 alter table public.jobs      enable row level security;
 alter table public.responses enable row level security;
 alter table public.payments  enable row level security;
+alter table public.complaints enable row level security;
 
 -- Публично (anon) можно читать опубликованные вакансии и профили авторов.
 create policy "jobs public read"     on public.jobs     for select using (status = 'published');

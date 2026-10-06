@@ -1,4 +1,5 @@
 import { NavLink } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 const TABS = [
   { to: '/', label: 'Вакансии', icon: '💼' },
@@ -9,9 +10,14 @@ const TABS = [
 ];
 
 export default function BottomNav() {
+  const { isAdmin } = useAuth();
+  const tabs = isAdmin
+    ? [...TABS, { to: '/admin', label: 'Админ', icon: '🛡️' }]
+    : TABS;
+
   return (
     <nav className="bottom-nav">
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <NavLink
           key={tab.to}
           to={tab.to}

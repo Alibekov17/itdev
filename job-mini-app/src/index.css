@@ -443,3 +443,80 @@ body {
   font-size: 19px;
   line-height: 1;
 }
+
+/* Админ-панель */
+.admin-links {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.admin-links .btn {
+  margin-top: 0;
+}
+
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.stat {
+  background: var(--secondary-bg);
+  border-radius: 10px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.stat--accent {
+  background: rgba(47, 128, 237, 0.12);
+}
+
+.stat__value {
+  font-size: 20px;
+  font-weight: 700;
+}
+
+.stat__label {
+  color: var(--hint);
+  font-size: 12px;
+}
+
+.admin-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.admin-actions .btn {
+  margin-top: 0;
+}
+
+.btn--sm {
+  padding: 8px 12px;
+  font-size: 13px;
+}
+
+.btn--danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn--danger:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.report {
+  margin-top: 12px;
+}
+
+.report select,
+.report textarea {
+  width: 100%;
+}

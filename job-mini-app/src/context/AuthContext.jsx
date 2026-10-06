@@ -30,7 +30,7 @@ export function AuthProvider({ children }) {
   }, [refresh]);
 
   return (
-    <AuthContext.Provider value={{ profile, loading, error, refresh }}>
+    <AuthContext.Provider value={{ profile, isAdmin: Boolean(profile?.is_admin), loading, error, refresh }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { apiFetch } from '../lib/api';
 import { getTelegram, haptic, notify, showPopup } from '../lib/telegram';
 import {
@@ -34,10 +34,13 @@ const EMPTY = {
 
 export default function CreateJob() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const isEdit = Boolean(id);
   const [form, setForm] = useState(EMPTY);
   const [skills, setSkills] = useState([]);
   const [skillInput, setSkillInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [loading, setLoading] = useState(isEdit);
   const [price, setPrice] = useState(null);
   const [paymentsEnabled, setPaymentsEnabled] = useState(false);
 
@@ -49,6 +52,49 @@ export default function CreateJob() {
       })
       .catch(() => {});
   }, []);
+
+  // Режим редактирования: подгружаем свою вакансию и заполняем форму.
+  useEffect(() => {
+    if (!isEdit) return;
+    let alive = true;
+    (async () => {
+      try {
+        const d = await apiFetch(`/api/jobs/${id}`);
+        if (!alive) return;
+        const job = d.job || {};
+        setForm({
+          title: job.title || '',
+          company: job.company || '',
+          company_logo_url: job.company_logo_url || '',
+          city: job.city || '',
+          is_remote: Boolean(job.is_remote),
+          employment_type: job.employment_type || '',
+          schedule: job.schedule || '',
+          experience: job.experience || '',
+          salary_from: job.salary_from ?? '',
+          salary_to: job.salary_to ?? '',
+          currency: job.currency || 'RUB',
+          gross: job.gross !== false,
+          description: job.description || '',
+          responsibilities: job.responsibilities || '',
+          requirements: job.requirements || '',
+          conditions: job.conditions || '',
+          contact: job.contact || '',
+          contact_email: job.contact_email || '',
+          contact_phone: job.contact_phone || '',
+        });
+        setSkills(Array.isArray(job.skills) ? job.skills : []);
+      } catch (e) {
+        showPopup('Ошибка', e.message);
+        navigate('/my-jobs');
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [id, isEdit, navigate]);
 
   const update = (field) => (e) => {
     const value = field === 'is_remote' || field === 'gross' ? e.target.checked : e.target.value;
@@ -86,6 +132,15 @@ export default function CreateJob() {
     setSending(true);
     haptic('light');
     try {
+      // Режим редактирования — сохраняем изменения без оплаты.
+      if (isEdit) {
+        await apiFetch(`/api/my/jobs/${id}`, { method: 'PATCH', body: { ...form, skills } });
+        notify('success');
+        showPopup('Готово', 'Изменения сохранены.');
+        navigate(`/job/${id}`);
+        return;
+      }
+
       const data = await apiFetch('/api/jobs', {
         method: 'POST',
         body: { ...form, skills },
@@ -93,7 +148,15 @@ export default function CreateJob() {
 
       const tg = getTelegram();
 
-      if (data.paymentsEnabled && data.invoiceUrl && tg?.openInvoice) {
+      if (!data.paymentsEnabled) {
+        // Demo-режим: подтверждаем оплату на бэкенде.
+        await apiFetch(`/api/payments/${data.payment.id}/demo-confirm`, { method: 'POST' });
+        finishSuccess();
+        return;
+      }
+
+      // Боевой режим Telegram Stars.
+      if (data.invoiceUrl && tg?.openInvoice) {
         tg.openInvoice(data.invoiceUrl, (status) => {
           if (status === 'paid') {
             finishSuccess();
@@ -102,14 +165,15 @@ export default function CreateJob() {
             navigate('/my-jobs');
           }
         });
-      } else if (data.paymentsEnabled && data.invoiceUrl) {
+      } else if (data.invoiceUrl) {
         // Вне Telegram — открываем ссылку в новой вкладке.
         window.open(data.invoiceUrl, '_blank');
         navigate('/my-jobs');
       } else {
-        // Demo-режим: подтверждаем оплату на бэкенде.
-        await apiFetch(`/api/payments/${data.payment.id}/demo-confirm`, { method: 'POST' });
-        finishSuccess();
+        // Счёт не создался — не публикуем бесплатно, отправляем в «Мои».
+        notify('error');
+        showPopup('Оплата недоступна', 'Не удалось создать счёт. Попробуйте оплатить в разделе «Мои».');
+        navigate('/my-jobs');
       }
     } catch (err) {
       notify('error');
@@ -131,10 +195,12 @@ export default function CreateJob() {
     };
   }, [navigate]);
 
+  if (loading) return <p className="empty">Загружаем вакансию…</p>;
+
   return (
     <form className="page form" onSubmit={submit}>
-      <h1>Разместить вакансию</h1>
-      {price != null && (
+      <h1>{isEdit ? 'Редактировать вакансию' : 'Разместить вакансию'}</h1>
+      {!isEdit && price != null && (
         <p className="page__subtitle">
           Стоимость размещения: {price} {paymentsEnabled ? '⭐ (Telegram Stars)' : '(demo-режим, оплата не списывается)'}
         </p>
@@ -282,7 +348,13 @@ export default function CreateJob() {
       </label>
 
       <button className="btn btn--primary" type="submit" disabled={sending}>
-        {sending ? 'Отправка…' : paymentsEnabled ? `Опубликовать за ${price} ⭐` : 'Опубликовать'}
+        {sending
+          ? 'Отправка…'
+          : isEdit
+            ? 'Сохранить изменения'
+            : paymentsEnabled
+              ? `Опубликовать за ${price} ⭐`
+              : 'Опубликовать'}
       </button>
     </form>
   );

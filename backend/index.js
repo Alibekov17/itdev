@@ -11,6 +11,22 @@ const PORT = process.env.PORT || 3000;
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
 const ALLOW_DEV_LOGIN = process.env.ALLOW_DEV_LOGIN === 'true';
 
+// Telegram ID администраторов (через запятую). Эти пользователи получают доступ
+// к админ-разделу и API. Пример: ADMIN_TELEGRAM_IDS=123456789,987654321
+const ADMIN_TELEGRAM_IDS = String(process.env.ADMIN_TELEGRAM_IDS || '')
+  .split(',')
+  .map((s) => Number(s.trim()))
+  .filter((n) => Number.isFinite(n) && n > 0);
+
+function isConfiguredAdmin(id) {
+  return ADMIN_TELEGRAM_IDS.includes(Number(id));
+}
+
+const JOB_STATUSES = ['pending_payment', 'published', 'archived', 'rejected'];
+const RESPONSE_STATUSES = ['sent', 'viewed', 'invited', 'rejected'];
+const COMPLAINT_STATUSES = ['open', 'resolved', 'rejected'];
+const COMPLAINT_REASONS = ['spam', 'fraud', 'offensive', 'wrong_info', 'other'];
+
 const app = express();
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: '1mb' }));
@@ -42,6 +58,9 @@ async function ensureProfile(user) {
     language_code: user.language_code || null,
     photo_url: user.photo_url || null,
   };
+  // Администраторы из ADMIN_TELEGRAM_IDS всегда получают флаг is_admin.
+  if (isConfiguredAdmin(user.id)) row.is_admin = true;
+
   const { data, error } = await supabase
     .from('profiles')
     .upsert(row, { onConflict: 'telegram_id' })
@@ -57,6 +76,23 @@ async function requireAuth(req, res, next) {
   if (!user) return res.status(401).json({ ok: false, error: 'Не удалось подтвердить вход через Telegram' });
   try {
     req.profile = await ensureProfile(user);
+    next();
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+}
+
+// Доступ только для администраторов.
+async function requireAdmin(req, res, next) {
+  const user = getTgUser(req);
+  if (!user) {
+    return res.status(401).json({ ok: false, error: 'Не удалось подтвердить вход через Telegram' });
+  }
+  try {
+    req.profile = await ensureProfile(user);
+    if (!req.profile.is_admin) {
+      return res.status(403).json({ ok: false, error: 'Доступ только для администраторов' });
+    }
     next();
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -106,6 +142,22 @@ async function markPaymentPaid(paymentId, externalId) {
   return payment;
 }
 
+// Количество строк по фильтру (для статистики).
+async function countRows(table, applyFilter) {
+  let query = supabase.from(table).select('*', { count: 'exact', head: true });
+  if (applyFilter) query = applyFilter(query);
+  const { count, error } = await query;
+  if (error) throw new Error(`${table} count: ${error.message}`);
+  return count || 0;
+}
+
+// Безопасное приведение к целому (или null).
+function toIntOrNull(value) {
+  if (value === undefined || value === null || value === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.trunc(n) : null;
+}
+
 // ---------------------------------------------------------------- config
 
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
@@ -117,6 +169,7 @@ app.get('/api/config', (_req, res) => {
     currency: 'XTR',
     paymentsEnabled: payments.enabled,
     usingServiceRole,
+    complaintReasons: COMPLAINT_REASONS,
   });
 });
 
@@ -356,11 +409,397 @@ app.get('/api/my/jobs', requireAuth, async (req, res) => {
   }
 });
 
+// Редактирование своей вакансии (и публикация/архив после оплаты).
+app.patch('/api/my/jobs/:id', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const { data: job, error } = await supabase
+      .from('jobs')
+      .select('*')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!job) return res.status(404).json({ ok: false, error: 'Вакансия не найдена' });
+    if (Number(job.author_id) !== Number(req.profile.telegram_id)) {
+      return res.status(403).json({ ok: false, error: 'Нет доступа' });
+    }
+
+    const patch = {};
+    const text = (v, max) => (v == null ? null : String(v).slice(0, max));
+    if (b.title !== undefined) patch.title = text(b.title, 200);
+    if (b.company !== undefined) patch.company = text(b.company, 200);
+    if (b.company_logo_url !== undefined) patch.company_logo_url = b.company_logo_url || null;
+    if (b.description !== undefined) patch.description = text(b.description, 20000);
+    if (b.city !== undefined) patch.city = b.city || null;
+    if (b.is_remote !== undefined) patch.is_remote = Boolean(b.is_remote);
+    if (b.employment_type !== undefined) patch.employment_type = b.employment_type || null;
+    if (b.schedule !== undefined) patch.schedule = b.schedule || null;
+    if (b.experience !== undefined) patch.experience = b.experience || null;
+    if (b.salary_from !== undefined) patch.salary_from = toIntOrNull(b.salary_from);
+    if (b.salary_to !== undefined) patch.salary_to = toIntOrNull(b.salary_to);
+    if (b.currency !== undefined) patch.currency = b.currency || 'RUB';
+    if (b.gross !== undefined) patch.gross = b.gross !== false;
+    if (b.responsibilities !== undefined) patch.responsibilities = text(b.responsibilities, 20000);
+    if (b.requirements !== undefined) patch.requirements = text(b.requirements, 20000);
+    if (b.conditions !== undefined) patch.conditions = text(b.conditions, 20000);
+    if (b.contact !== undefined) patch.contact = b.contact || null;
+    if (b.contact_email !== undefined) patch.contact_email = b.contact_email || null;
+    if (b.contact_phone !== undefined) patch.contact_phone = b.contact_phone || null;
+    if (Array.isArray(b.skills)) patch.skills = b.skills.slice(0, 30).map((s) => String(s).slice(0, 60));
+
+    if (b.status !== undefined) {
+      if (job.status === 'pending_payment') {
+        return res.status(400).json({ ok: false, error: 'Сначала оплатите размещение вакансии' });
+      }
+      if (job.status === 'rejected') {
+        return res.status(400).json({ ok: false, error: 'Вакансия отклонена модератором' });
+      }
+      if (!['published', 'archived'].includes(b.status)) {
+        return res.status(400).json({ ok: false, error: 'Недопустимый статус' });
+      }
+      patch.status = b.status;
+      if (b.status === 'published') patch.published_at = job.published_at || new Date().toISOString();
+    }
+
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'Нет полей для обновления' });
+    }
+
+    const { data: updated, error: updErr } = await supabase
+      .from('jobs')
+      .update(patch)
+      .eq('id', job.id)
+      .select()
+      .single();
+    if (updErr) throw new Error(updErr.message);
+    res.json({ ok: true, job: updated });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Удаление своей вакансии.
+app.delete('/api/my/jobs/:id', requireAuth, async (req, res) => {
+  try {
+    const { data: job, error } = await supabase
+      .from('jobs')
+      .select('id, author_id')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!job) return res.status(404).json({ ok: false, error: 'Вакансия не найдена' });
+    if (Number(job.author_id) !== Number(req.profile.telegram_id)) {
+      return res.status(403).json({ ok: false, error: 'Нет доступа' });
+    }
+    const { error: delErr } = await supabase.from('jobs').delete().eq('id', job.id);
+    if (delErr) throw new Error(delErr.message);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Отклики на мои вакансии (для работодателя).
+app.get('/api/my/received-responses', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('responses')
+      .select(
+        '*, job:jobs!inner(id, title, company, author_id, status), applicant:profiles!responses_applicant_id_fkey(telegram_id, first_name, last_name, username, photo_url)'
+      )
+      .eq('job.author_id', req.profile.telegram_id)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, responses: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// Смена статуса отклика владельцем вакансии (просмотрен / приглашение / отказ).
+app.patch('/api/responses/:id/status', requireAuth, async (req, res) => {
+  try {
+    const status = req.body?.status;
+    if (!RESPONSE_STATUSES.includes(status)) {
+      return res.status(400).json({ ok: false, error: 'Недопустимый статус отклика' });
+    }
+    const { data: resp, error } = await supabase
+      .from('responses')
+      .select('id, job:jobs(author_id)')
+      .eq('id', req.params.id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!resp) return res.status(404).json({ ok: false, error: 'Отклик не найден' });
+    if (Number(resp.job?.author_id) !== Number(req.profile.telegram_id)) {
+      return res.status(403).json({ ok: false, error: 'Нет доступа' });
+    }
+    const { data, error: updErr } = await supabase
+      .from('responses')
+      .update({ status })
+      .eq('id', resp.id)
+      .select()
+      .single();
+    if (updErr) throw new Error(updErr.message);
+    res.json({ ok: true, response: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ---------------------------------------------------------------- complaints (users)
+
+app.post('/api/complaints', requireAuth, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const reason = String(b.reason || '').trim();
+    if (!COMPLAINT_REASONS.includes(reason)) {
+      return res.status(400).json({ ok: false, error: 'Укажите корректную причину жалобы' });
+    }
+
+    const jobId = b.job_id || null;
+    if (jobId) {
+      const { data: job, error: jobErr } = await supabase
+        .from('jobs')
+        .select('id, author_id')
+        .eq('id', jobId)
+        .maybeSingle();
+      if (jobErr) throw new Error(jobErr.message);
+      if (!job) return res.status(404).json({ ok: false, error: 'Вакансия не найдена' });
+      if (Number(job.author_id) === Number(req.profile.telegram_id)) {
+        return res.status(400).json({ ok: false, error: 'Нельзя пожаловаться на свою вакансию' });
+      }
+    }
+
+    // Не даём создавать дубли открытых жалоб.
+    let dup = supabase
+      .from('complaints')
+      .select('id')
+      .eq('reporter_id', req.profile.telegram_id)
+      .eq('status', 'open');
+    dup = jobId ? dup.eq('job_id', jobId) : dup.is('job_id', null);
+    const { data: existing } = await dup.maybeSingle();
+    if (existing) {
+      return res.status(400).json({ ok: false, error: 'Вы уже отправили жалобу, она на рассмотрении' });
+    }
+
+    const { data, error } = await supabase
+      .from('complaints')
+      .insert({
+        reporter_id: req.profile.telegram_id,
+        job_id: jobId,
+        reason,
+        message: b.message ? String(b.message).slice(0, 2000) : null,
+      })
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, complaint: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/my/complaints', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('complaints')
+      .select('*, job:jobs(id, title, company)')
+      .eq('reporter_id', req.profile.telegram_id)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, complaints: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ---------------------------------------------------------------- admin
+
+app.get('/api/admin/stats', requireAdmin, async (_req, res) => {
+  try {
+    const [users, jobsTotal, jobsPublished, jobsPending, responses, complaintsOpen, complaintsTotal, paymentsPaid] =
+      await Promise.all([
+        countRows('profiles'),
+        countRows('jobs'),
+        countRows('jobs', (q) => q.eq('status', 'published')),
+        countRows('jobs', (q) => q.eq('status', 'pending_payment')),
+        countRows('responses'),
+        countRows('complaints', (q) => q.eq('status', 'open')),
+        countRows('complaints'),
+        countRows('payments', (q) => q.eq('status', 'paid')),
+      ]);
+    res.json({
+      ok: true,
+      stats: { users, jobsTotal, jobsPublished, jobsPending, responses, complaintsOpen, complaintsTotal, paymentsPaid },
+    });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/admin/jobs', requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    let query = supabase
+      .from('jobs')
+      .select('*, author:profiles!jobs_author_id_fkey(telegram_id, first_name, last_name, username)', {
+        count: 'exact',
+      });
+    if (status) query = query.eq('status', status);
+    const term = sanitizeSearch(req.query.q);
+    if (term) query = query.or(`title.ilike.%${term}%,company.ilike.%${term}%`);
+    query = query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, jobs: data, total: count });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.patch('/api/admin/jobs/:id', requireAdmin, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const patch = {};
+    if (b.status !== undefined) {
+      if (!JOB_STATUSES.includes(b.status)) {
+        return res.status(400).json({ ok: false, error: 'Недопустимый статус вакансии' });
+      }
+      patch.status = b.status;
+      if (b.status === 'published') patch.published_at = new Date().toISOString();
+    }
+    if (b.title !== undefined) patch.title = String(b.title).slice(0, 200);
+    if (b.company !== undefined) patch.company = String(b.company).slice(0, 200);
+    if (b.description !== undefined) patch.description = String(b.description).slice(0, 20000);
+
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'Нет полей для обновления' });
+    }
+    const { data, error } = await supabase.from('jobs').update(patch).eq('id', req.params.id).select().single();
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, job: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.delete('/api/admin/jobs/:id', requireAdmin, async (req, res) => {
+  try {
+    const { error } = await supabase.from('jobs').delete().eq('id', req.params.id);
+    if (error) throw new Error(error.message);
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/admin/complaints', requireAdmin, async (req, res) => {
+  try {
+    const { status } = req.query;
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+
+    let query = supabase
+      .from('complaints')
+      .select(
+        '*, job:jobs(id, title, company, status, author_id), reporter:profiles!complaints_reporter_id_fkey(telegram_id, first_name, last_name, username)',
+        { count: 'exact' }
+      );
+    if (status) query = query.eq('status', status);
+    query = query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, complaints: data, total: count });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.patch('/api/admin/complaints/:id', requireAdmin, async (req, res) => {
+  try {
+    const b = req.body || {};
+    const patch = {};
+    if (b.status !== undefined) {
+      if (!COMPLAINT_STATUSES.includes(b.status)) {
+        return res.status(400).json({ ok: false, error: 'Недопустимый статус жалобы' });
+      }
+      patch.status = b.status;
+      if (b.status === 'open') {
+        patch.resolved_by = null;
+        patch.resolved_at = null;
+      } else {
+        patch.resolved_by = req.profile.telegram_id;
+        patch.resolved_at = new Date().toISOString();
+      }
+    }
+    if (b.admin_reply !== undefined) {
+      patch.admin_reply = b.admin_reply ? String(b.admin_reply).slice(0, 2000) : null;
+    }
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ ok: false, error: 'Нет полей для обновления' });
+    }
+    const { data, error } = await supabase
+      .from('complaints')
+      .update(patch)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, complaint: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.get('/api/admin/users', requireAdmin, async (req, res) => {
+  try {
+    const limit = Math.min(Number(req.query.limit) || 50, 200);
+    const offset = Number(req.query.offset) || 0;
+    let query = supabase.from('profiles').select('*', { count: 'exact' });
+    const term = sanitizeSearch(req.query.q);
+    if (term) {
+      query = query.or(`username.ilike.%${term}%,first_name.ilike.%${term}%,last_name.ilike.%${term}%`);
+    }
+    query = query.order('created_at', { ascending: false }).range(offset, offset + limit - 1);
+    const { data, error, count } = await query;
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, users: data, total: count });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+app.patch('/api/admin/users/:id', requireAdmin, async (req, res) => {
+  try {
+    const isAdmin = Boolean(req.body?.is_admin);
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ is_admin: isAdmin })
+      .eq('telegram_id', req.params.id)
+      .select()
+      .single();
+    if (error) throw new Error(error.message);
+    res.json({ ok: true, user: data });
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
 // ---------------------------------------------------------------- payments
 
 // Demo-подтверждение оплаты (когда бот/Stars не настроены).
+// В боевом режиме (BOT_TOKEN задан) этот эндпоинт отключён — иначе можно было бы
+// публиковать вакансии бесплатно, минуя оплату Stars.
 app.post('/api/payments/:id/demo-confirm', requireAuth, async (req, res) => {
   try {
+    if (payments.enabled) {
+      return res.status(400).json({ ok: false, error: 'Демо-оплата отключена. Используйте оплату звёздами.' });
+    }
     const { data: payment, error } = await supabase
       .from('payments')
       .select('*')
@@ -370,6 +809,9 @@ app.post('/api/payments/:id/demo-confirm', requireAuth, async (req, res) => {
     if (!payment) return res.status(404).json({ ok: false, error: 'Платёж не найден' });
     if (Number(payment.telegram_id) !== Number(req.profile.telegram_id)) {
       return res.status(403).json({ ok: false, error: 'Нет доступа' });
+    }
+    if (payment.status === 'paid') {
+      return res.json({ ok: true, payment, alreadyPaid: true });
     }
 
     const updated = await markPaymentPaid(payment.id, 'demo');

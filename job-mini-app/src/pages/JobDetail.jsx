@@ -10,6 +10,7 @@ import {
   EXPERIENCES,
   EMPLOYMENT_TYPES,
   SCHEDULES,
+  COMPLAINT_REASONS,
 } from '../lib/constants';
 
 export default function JobDetail() {
@@ -27,6 +28,12 @@ export default function JobDetail() {
   const [coverLetter, setCoverLetter] = useState('');
   const [contact, setContact] = useState('');
   const [sending, setSending] = useState(false);
+
+  const [showReport, setShowReport] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [reportMessage, setReportMessage] = useState('');
+  const [reporting, setReporting] = useState(false);
+  const [reported, setReported] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -70,6 +77,26 @@ export default function JobDetail() {
       showPopup('Ошибка', e.message);
     } finally {
       setSending(false);
+    }
+  };
+
+  const sendReport = async () => {
+    if (reporting || !reportReason) return;
+    setReporting(true);
+    try {
+      await apiFetch('/api/complaints', {
+        method: 'POST',
+        body: { job_id: job.id, reason: reportReason, message: reportMessage },
+      });
+      notify('success');
+      setReported(true);
+      setShowReport(false);
+      showPopup('Жалоба отправлена', 'Спасибо! Модератор рассмотрит обращение.');
+    } catch (e) {
+      notify('error');
+      showPopup('Ошибка', e.message);
+    } finally {
+      setReporting(false);
     }
   };
 
@@ -194,6 +221,65 @@ export default function JobDetail() {
         Автор: {author ? [author.first_name, author.last_name].filter(Boolean).join(' ') || author.username : 'неизвестен'}
         {job.published_at ? ` · Опубликовано ${formatDate(job.published_at)}` : ''}
       </p>
+
+      {isOwner && (
+        <div className="admin-actions">
+          <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate(`/edit/${job.id}`)}>
+            Редактировать
+          </button>
+          <button type="button" className="btn btn--secondary btn--sm" onClick={() => navigate('/received')}>
+            Отклики
+          </button>
+        </div>
+      )}
+
+      {profile && !isOwner && job.status === 'published' && !reported && (
+        <div className="report">
+          {!showReport ? (
+            <button type="button" className="link" onClick={() => setShowReport(true)}>
+              🚩 Пожаловаться на вакансию
+            </button>
+          ) : (
+            <section className="section">
+              <h2>Жалоба на вакансию</h2>
+              <label className="field">
+                <span>Причина *</span>
+                <select value={reportReason} onChange={(e) => setReportReason(e.target.value)}>
+                  <option value="">Выберите причину</option>
+                  {COMPLAINT_REASONS.map((r) => (
+                    <option key={r.value} value={r.value}>
+                      {r.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field">
+                <span>Комментарий</span>
+                <textarea
+                  rows={3}
+                  value={reportMessage}
+                  onChange={(e) => setReportMessage(e.target.value)}
+                  placeholder="Опишите проблему"
+                />
+              </label>
+              <div className="admin-actions">
+                <button
+                  type="button"
+                  className="btn btn--danger btn--sm"
+                  disabled={reporting || !reportReason}
+                  onClick={sendReport}
+                >
+                  {reporting ? 'Отправляем…' : 'Отправить жалобу'}
+                </button>
+                <button type="button" className="btn btn--secondary btn--sm" onClick={() => setShowReport(false)}>
+                  Отмена
+                </button>
+              </div>
+            </section>
+          )}
+        </div>
+      )}
+      {reported && <p className="badge badge--ok">Жалоба отправлена модератору</p>}
 
       {canRespond && (
         <section className="section">
