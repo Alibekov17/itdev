@@ -1,0 +1,45 @@
+# Render Blueprint для бэкенда Job Mini App.
+#
+# Как задеплоить:
+#   1) Откройте https://dashboard.render.com/blueprints
+#   2) New Blueprint Instance → выберите этот репозиторий.
+#   3) Render прочитает этот файл и создаст веб-сервис.
+#   4) Заполните секретные переменные (помечены sync: false) в дашборде.
+#
+# Документация: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: itdev-backend
+    runtime: node
+    plan: free
+    region: frankfurt
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: JOB_POST_PRICE_STARS
+        value: "100"
+      - key: CORS_ORIGIN
+        value: "*"
+      - key: ALLOW_DEV_LOGIN
+        value: "false"
+      # Секреты — задаются в дашборде Render (не хранятся в git).
+      - key: BOT_TOKEN
+        sync: false
+      - key: WEBAPP_URL
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ADMIN_TELEGRAM_IDS
+        sync: false
+      - key: WEBHOOK_SECRET
+        sync: false

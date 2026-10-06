@@ -948,6 +948,11 @@ async function handleTelegramUpdate(update) {
 }
 
 app.post('/api/telegram/webhook', async (req, res) => {
+  // Если задан WEBHOOK_SECRET, проверяем секретный заголовок Telegram.
+  const secret = process.env.WEBHOOK_SECRET;
+  if (secret && req.get('X-Telegram-Bot-Api-Secret-Token') !== secret) {
+    return res.sendStatus(401);
+  }
   res.json({ ok: true });
   try {
     await handleTelegramUpdate(req.body);
@@ -958,12 +963,34 @@ app.post('/api/telegram/webhook', async (req, res) => {
 
 // ---------------------------------------------------------------- start
 
-app.listen(PORT, () => {
+// Публичный адрес сервиса для вебхука: задайте WEBHOOK_URL вручную либо
+// используется RENDER_EXTERNAL_URL (Render подставляет его автоматически).
+const PUBLIC_URL = String(process.env.WEBHOOK_URL || process.env.RENDER_EXTERNAL_URL || '')
+  .trim()
+  .replace(/\/$/, '');
+
+app.listen(PORT, async () => {
   console.log(`Backend запущен на порту ${PORT}`);
   console.log(`Платежи: ${payments.enabled ? 'Telegram Stars' : 'demo-режим (BOT_TOKEN не задан)'}`);
-  if (payments.enabled) {
+
+  if (!payments.enabled) return;
+
+  // Кнопка-меню со ссылкой на Mini App (нужен WEBAPP_URL).
+  bot.setMenuButton().catch((e) => console.error('[bot] setMenuButton:', e.message));
+
+  if (PUBLIC_URL) {
+    // Облачный хостинг: используем вебхук (надёжнее polling на «засыпающих» сервисах).
+    const hookUrl = `${PUBLIC_URL}/api/telegram/webhook`;
+    try {
+      await payments.deleteWebhook();
+      await payments.setWebhook(hookUrl, process.env.WEBHOOK_SECRET);
+      console.log(`[payments] Telegram webhook установлен: ${hookUrl}`);
+    } catch (e) {
+      console.error('[payments] не удалось установить webhook, перехожу на polling:', e.message);
+      payments.startPolling(handleTelegramUpdate);
+    }
+  } else {
+    // Локально/на постоянно работающем сервере: длинный polling.
     payments.startPolling(handleTelegramUpdate);
-    // Кнопка-меню со ссылкой на Mini App (нужен WEBAPP_URL).
-    bot.setMenuButton().catch((e) => console.error('[bot] setMenuButton:', e.message));
   }
 });

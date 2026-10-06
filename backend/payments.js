@@ -42,6 +42,27 @@ async function answerPreCheckoutQuery(preCheckoutQueryId, ok = true, errorMessag
   });
 }
 
+// ---- Webhook (рекомендуется для облачного хостинга, например Render) ----
+
+// Регистрирует вебхук: Telegram сам присылает апдейты на наш /api/telegram/webhook.
+async function setWebhook(url, secretToken) {
+  const data = await callTelegram('setWebhook', {
+    url,
+    ...(secretToken ? { secret_token: secretToken } : {}),
+    allowed_updates: ['message', 'pre_checkout_query'],
+    drop_pending_updates: false,
+  });
+  if (!data.ok) throw new Error(`setWebhook: ${data.description || 'unknown error'}`);
+  return data;
+}
+
+// Снимает вебхук (нужно перед включением polling).
+async function deleteWebhook() {
+  const data = await callTelegram('deleteWebhook', { drop_pending_updates: false });
+  if (!data.ok) throw new Error(`deleteWebhook: ${data.description || 'unknown error'}`);
+  return data;
+}
+
 // Длинный polling getUpdates. onUpdate(update) вызывается для каждого апдейта.
 function startPolling(onUpdate) {
   if (!enabled) return;
@@ -86,4 +107,6 @@ module.exports = {
   createInvoiceLink,
   answerPreCheckoutQuery,
   startPolling,
+  setWebhook,
+  deleteWebhook,
 };
