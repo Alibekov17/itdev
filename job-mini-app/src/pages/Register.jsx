@@ -15,6 +15,11 @@ export default function Register() {
     city: '',
     phone: '',
     about: '',
+    company_name: '',
+    position: '',
+    skills: '',
+    experience: '',
+    portfolio_url: '',
   });
   const [sending, setSending] = useState(false);
 
@@ -126,6 +131,32 @@ export default function Register() {
           onChange={update('about')}
           placeholder="Опыт, навыки, чем можете быть полезны"
         />
+      </label>
+
+      <label className="field">
+        <span>Компания</span>
+        <input value={form.company_name} onChange={update('company_name')} placeholder="Название компании" />
+      </label>
+      <label className="field">
+        <span>Должность</span>
+        <input value={form.position} onChange={update('position')} placeholder="Например: HR-менеджер" />
+      </label>
+      <label className="field">
+        <span>Навыки</span>
+        <input value={form.skills} onChange={update('skills')} placeholder="JavaScript, React, Figma" />
+      </label>
+      <label className="field">
+        <span>Опыт работы</span>
+        <textarea
+          rows={3}
+          value={form.experience}
+          onChange={update('experience')}
+          placeholder="Расскажите о своём опыте"
+        />
+      </label>
+      <label className="field">
+        <span>Портфолио (ссылка)</span>
+        <input value={form.portfolio_url} onChange={update('portfolio_url')} placeholder="https://…" />
       </label>
 
       <button className="btn btn--primary" type="submit" disabled={sending}>

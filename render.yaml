@@ -20,8 +20,9 @@ services:
     healthCheckPath: /api/health
     autoDeploy: true
     envVars:
+      # Supabase JS требует Node 22+ (нативный WebSocket).
       - key: NODE_VERSION
-        value: "20"
+        value: "22"
       - key: JOB_POST_PRICE_STARS
         value: "100"
       - key: CORS_ORIGIN

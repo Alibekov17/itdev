@@ -200,6 +200,16 @@ app.patch('/api/profile', requireAuth, async (req, res) => {
       }
       patch.role = b.role || null;
     }
+    // Новые поля профиля.
+    if (b.resume_url !== undefined) patch.resume_url = b.resume_url || null;
+    if (b.portfolio_url !== undefined) patch.portfolio_url = b.portfolio_url || null;
+    if (b.experience_years !== undefined) patch.experience_years = b.experience_years != null ? Math.min(100, Number(b.experience_years)) : null;
+    if (b.skills !== undefined) {
+      patch.skills = Array.isArray(b.skills) ? b.skills.slice(0, 30).map((s) => String(s).slice(0, 60)) : null;
+    }
+    if (b.education !== undefined) patch.education = b.education ? String(b.education).slice(0, 500) : null;
+    if (b.about_employer !== undefined) patch.about_employer = b.about_employer ? String(b.about_employer).slice(0, 2000) : null;
+    if (b.about_seeker !== undefined) patch.about_seeker = b.about_seeker ? String(b.about_seeker).slice(0, 2000) : null;
 
     // Явная регистрация: требуется имя и роль.
     if (b.register === true || b.is_registered === true) {
@@ -423,6 +433,10 @@ app.post('/api/jobs/:id/respond', requireAuth, async (req, res) => {
       .select()
       .single();
     if (error) throw new Error(error.message);
+
+    // Уведомляем заказчика об отклике через бота.
+    bot.notifyNewResponse(data.id, job.id, req.profile.telegram_id).catch(() => {});
+
     res.json({ ok: true, response: data });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -933,6 +947,16 @@ async function handleTelegramUpdate(update) {
       console.log('[payments] оплата подтверждена:', paymentId);
     } catch (e) {
       console.error('[payments] не удалось обработать оплату:', e.message);
+    }
+    return;
+  }
+
+  // Callback-запросы (выбор роли и др.).
+  if (update.callback_query) {
+    try {
+      await bot.handleCallbackQuery(update.callback_query);
+    } catch (e) {
+      console.error('[bot] ошибка обработки callback:', e.message);
     }
     return;
   }
